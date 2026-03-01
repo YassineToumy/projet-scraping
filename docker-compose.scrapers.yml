@@ -1,0 +1,147 @@
+version: "3.8"
+
+# ============================================================
+# Scraper Orchestration — Daily Scheduled via Docker
+# Server: 187.77.168.42
+#
+# Deploy:
+#   docker compose -f docker-compose.scrapers.yml up -d --build
+#
+# Manual run:
+#   docker compose -f docker-compose.scrapers.yml run --rm scraper-bienici
+# ============================================================
+
+x-common-env: &common-env
+  MONGODB_URI: ${MONGODB_URI}
+  POSTGRES_DSN: ${POSTGRES_DSN}
+  TZ: UTC
+
+x-common: &common
+  restart: "no"
+  env_file: .env
+  environment:
+    <<: *common-env
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  logging:
+    driver: json-file
+    options:
+      max-size: "50m"
+      max-file: "3"
+
+services:
+
+  # ────────────────────────────────────────────
+  # SCHEDULER — Cron daemon (only always-on container)
+  # ────────────────────────────────────────────
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.scheduler
+    container_name: scraper-scheduler
+    restart: always
+    env_file: .env
+    environment:
+      <<: *common-env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+      - ./docker-compose.scrapers.yml:/app/docker-compose.scrapers.yml:ro
+
+  # ────────────────────────────────────────────
+  # Bien'ici (France) — HTTP only
+  # ────────────────────────────────────────────
+  scraper-bienici:
+    <<: *common
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper-http
+    container_name: scraper-bienici
+    command: ["python", "-u", "bienici_scraper_locations.py"]
+    volumes:
+      - ./bienici_scraper_locations.py:/app/bienici_scraper_locations.py:ro
+      - ./.env:/app/.env:ro
+      - ./logs:/app/logs
+    profiles: ["bienici", "all"]
+
+  # ────────────────────────────────────────────
+  # Mubawab (Tunisia) — HTTP only
+  # ────────────────────────────────────────────
+  scraper-mubawab:
+    <<: *common
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper-http
+    container_name: scraper-mubawab
+    command: ["python", "-u", "scraper_mubawab_locations.py"]
+    volumes:
+      - ./scraper_mubawab_locations.py:/app/scraper_mubawab_locations.py:ro
+      - ./.env:/app/.env:ro
+      - ./logs:/app/logs
+    profiles: ["mubawab", "all"]
+
+  # ────────────────────────────────────────────
+  # MktList (Canada) — HTTP only
+  # ────────────────────────────────────────────
+  scraper-mktlist:
+    <<: *common
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper-http
+    container_name: scraper-mktlist
+    command: ["python", "-u", "scraper_mktlist_locations.py"]
+    volumes:
+      - ./scraper_mktlist_locations.py:/app/scraper_mktlist_locations.py:ro
+      - ./.env:/app/.env:ro
+      - ./logs:/app/logs
+    profiles: ["mktlist", "all"]
+
+  # ────────────────────────────────────────────
+  # PropertyFinder (Egypt) — Playwright headless
+  # ────────────────────────────────────────────
+  scraper-propertyfinder:
+    <<: *common
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper-browser
+    container_name: scraper-propertyfinder
+    command: ["python", "-u", "scraper_propertyfinder_locations.py"]
+    volumes:
+      - ./scraper_propertyfinder_locations.py:/app/scraper_propertyfinder_locations.py:ro
+      - ./.env:/app/.env:ro
+      - ./logs:/app/logs
+    shm_size: "2gb"
+    profiles: ["propertyfinder", "all"]
+
+  # ────────────────────────────────────────────
+  # SYNC — MongoDB -> PostgreSQL + Archive
+  # ────────────────────────────────────────────
+  scraper-sync:
+    <<: *common
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper-http
+    container_name: scraper-sync
+    command: ["python", "-u", "mongo_to_postgre.py", "--once"]
+    volumes:
+      - ./mongo_to_postgre.py:/app/mongo_to_postgre.py:ro
+      - ./.env:/app/.env:ro
+      - ./logs:/app/logs
+    profiles: ["sync"]
+
+  # ────────────────────────────────────────────
+  # MONITOR — Health checks
+  # ────────────────────────────────────────────
+  scraper-monitor:
+    <<: *common
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper-http
+    container_name: scraper-monitor
+    command: ["python", "-u", "monitor.py"]
+    volumes:
+      - ./monitor.py:/app/monitor.py:ro
+      - ./.env:/app/.env:ro
+      - ./logs:/app/logs
+    profiles: ["monitor"]
