@@ -1,14 +1,9 @@
-version: "3.8"
-
 # ============================================================
-# Scraper Orchestration — Daily Scheduled via Docker
+# Scraper Orchestration — Dokploy Compatible
 # Server: 187.77.168.42
 #
-# Deploy:
-#   docker compose -f docker-compose.scrapers.yml up -d --build
-#
-# Manual run:
-#   docker compose -f docker-compose.scrapers.yml run --rm scraper-bienici
+# Only the scheduler runs permanently.
+# Scrapers are triggered by scheduler.sh via docker exec/run.
 # ============================================================
 
 x-common-env: &common-env
@@ -16,23 +11,10 @@ x-common-env: &common-env
   POSTGRES_DSN: ${POSTGRES_DSN}
   TZ: UTC
 
-x-common: &common
-  restart: "no"
-  env_file: .env
-  environment:
-    <<: *common-env
-  extra_hosts:
-    - "host.docker.internal:host-gateway"
-  logging:
-    driver: json-file
-    options:
-      max-size: "50m"
-      max-file: "3"
-
 services:
 
   # ────────────────────────────────────────────
-  # SCHEDULER — Cron daemon (only always-on container)
+  # SCHEDULER — Cron daemon (only always-on)
   # ────────────────────────────────────────────
   scheduler:
     build:
@@ -50,98 +32,140 @@ services:
       - ./docker-compose.scrapers.yml:/app/docker-compose.scrapers.yml:ro
 
   # ────────────────────────────────────────────
-  # Bien'ici (France) — HTTP only
+  # Bien'ici (France)
   # ────────────────────────────────────────────
   scraper-bienici:
-    <<: *common
     build:
       context: .
       dockerfile: Dockerfile.scraper-http
     container_name: scraper-bienici
-    command: ["python", "-u", "bienici_scraper_locations.py"]
+    restart: "no"
+    env_file: .env
+    environment:
+      <<: *common-env
+    command: ["echo", "Waiting for cron trigger"]
     volumes:
       - ./bienici_scraper_locations.py:/app/bienici_scraper_locations.py:ro
       - ./.env:/app/.env:ro
       - ./logs:/app/logs
-    profiles: ["bienici", "all"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   # ────────────────────────────────────────────
-  # Mubawab (Tunisia) — HTTP only
+  # Mubawab (Tunisia)
   # ────────────────────────────────────────────
   scraper-mubawab:
-    <<: *common
     build:
       context: .
       dockerfile: Dockerfile.scraper-http
     container_name: scraper-mubawab
-    command: ["python", "-u", "scraper_mubawab_locations.py"]
+    restart: "no"
+    env_file: .env
+    environment:
+      <<: *common-env
+    command: ["echo", "Waiting for cron trigger"]
     volumes:
       - ./scraper_mubawab_locations.py:/app/scraper_mubawab_locations.py:ro
       - ./.env:/app/.env:ro
       - ./logs:/app/logs
-    profiles: ["mubawab", "all"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   # ────────────────────────────────────────────
-  # MktList (Canada) — HTTP only
+  # MktList (Canada)
   # ────────────────────────────────────────────
   scraper-mktlist:
-    <<: *common
     build:
       context: .
       dockerfile: Dockerfile.scraper-http
     container_name: scraper-mktlist
-    command: ["python", "-u", "scraper_mktlist_locations.py"]
+    restart: "no"
+    env_file: .env
+    environment:
+      <<: *common-env
+    command: ["echo", "Waiting for cron trigger"]
     volumes:
       - ./scraper_mktlist_locations.py:/app/scraper_mktlist_locations.py:ro
       - ./.env:/app/.env:ro
       - ./logs:/app/logs
-    profiles: ["mktlist", "all"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   # ────────────────────────────────────────────
   # PropertyFinder (Egypt) — Playwright headless
   # ────────────────────────────────────────────
   scraper-propertyfinder:
-    <<: *common
     build:
       context: .
       dockerfile: Dockerfile.scraper-browser
     container_name: scraper-propertyfinder
-    command: ["python", "-u", "scraper_propertyfinder_locations.py"]
+    restart: "no"
+    env_file: .env
+    environment:
+      <<: *common-env
+    command: ["echo", "Waiting for cron trigger"]
     volumes:
       - ./scraper_propertyfinder_locations.py:/app/scraper_propertyfinder_locations.py:ro
       - ./.env:/app/.env:ro
       - ./logs:/app/logs
     shm_size: "2gb"
-    profiles: ["propertyfinder", "all"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   # ────────────────────────────────────────────
-  # SYNC — MongoDB -> PostgreSQL + Archive
+  # SYNC — MongoDB -> PostgreSQL
   # ────────────────────────────────────────────
   scraper-sync:
-    <<: *common
     build:
       context: .
       dockerfile: Dockerfile.scraper-http
     container_name: scraper-sync
-    command: ["python", "-u", "mongo_to_postgre.py", "--once"]
+    restart: "no"
+    env_file: .env
+    environment:
+      <<: *common-env
+    command: ["echo", "Waiting for cron trigger"]
     volumes:
       - ./mongo_to_postgre.py:/app/mongo_to_postgre.py:ro
       - ./.env:/app/.env:ro
       - ./logs:/app/logs
-    profiles: ["sync"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   # ────────────────────────────────────────────
-  # MONITOR — Health checks
+  # MONITOR
   # ────────────────────────────────────────────
   scraper-monitor:
-    <<: *common
     build:
       context: .
       dockerfile: Dockerfile.scraper-http
     container_name: scraper-monitor
-    command: ["python", "-u", "monitor.py"]
+    restart: "no"
+    env_file: .env
+    environment:
+      <<: *common-env
+    command: ["echo", "Waiting for cron trigger"]
     volumes:
       - ./monitor.py:/app/monitor.py:ro
       - ./.env:/app/.env:ro
       - ./logs:/app/logs
-    profiles: ["monitor"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
