@@ -9,28 +9,30 @@ echo "════════════════════════�
 # ── Export all env vars so cron jobs can access them ──
 printenv | grep -v "no_proxy" >> /etc/environment
 
-# ── Write crontab with env vars baked in ──
+# ── Write crontab ──
+# PropertyFinder runs every 6h (slow, needs multiple runs)
+# Others run once daily (fast HTTP scrapers)
 cat > /etc/cron.d/scrapers <<'CRON'
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin
 
-# Bien'ici (France) — 03:00 UTC
+# Bien'ici (France) — daily 03:00 UTC (HTTP, fast)
 0 3 * * * root /app/runner.sh bienici >> /app/logs/cron.log 2>&1
 
-# Mubawab (Tunisia) — 04:00 UTC
+# Mubawab (Tunisia) — daily 04:00 UTC (HTTP, fast)
 0 4 * * * root /app/runner.sh mubawab >> /app/logs/cron.log 2>&1
 
-# MktList (Canada) — 05:00 UTC
+# MktList (Canada) — daily 05:00 UTC (HTTP, fast)
 0 5 * * * root /app/runner.sh mktlist >> /app/logs/cron.log 2>&1
 
-# PropertyFinder (Egypt) — 06:00 UTC
-0 6 * * * root /app/runner.sh propertyfinder >> /app/logs/cron.log 2>&1
+# PropertyFinder (Egypt) — every 6h (Playwright, slow, needs multiple passes)
+0 */6 * * * root /app/runner.sh propertyfinder >> /app/logs/cron.log 2>&1
 
-# Sync MongoDB -> PostgreSQL — 10:00 UTC
+# Sync MongoDB -> PostgreSQL — daily 10:00 UTC
 0 10 * * * root /app/runner.sh sync >> /app/logs/cron.log 2>&1
 
 # Health monitor — every 6 hours
-0 */6 * * * root /app/runner.sh monitor >> /app/logs/cron.log 2>&1
+30 */6 * * * root /app/runner.sh monitor >> /app/logs/cron.log 2>&1
 
 CRON
 
@@ -64,9 +66,29 @@ conn.close()
 
 echo ""
 echo "══════════════════════════════════════════════════"
+echo "📅 Schedule:"
+echo "   03:00  🇫🇷 Bien'ici (daily)"
+echo "   04:00  🇹🇳 Mubawab (daily)"
+echo "   05:00  🇨🇦 MktList (daily)"
+echo "   */6h   🇪🇬 PropertyFinder (every 6h)"
+echo "   10:00  🔄 Sync to PostgreSQL (daily)"
+echo "   */6h   📊 Health monitor"
+echo ""
 echo "✅ Ready — cron daemon starting"
-echo "   Logs: /app/logs/"
 echo "══════════════════════════════════════════════════"
+
+# ── Run all scrapers once on startup to catch up ──
+echo ""
+echo "🔄 Running initial scrape on startup..."
+/app/runner.sh bienici &
+sleep 5
+/app/runner.sh mubawab &
+sleep 5
+/app/runner.sh mktlist &
+sleep 5
+/app/runner.sh propertyfinder &
+sleep 5
+/app/runner.sh sync &
 
 # ── Start cron in foreground (keeps container alive) ──
 exec cron -f
