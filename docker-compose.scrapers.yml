@@ -1,171 +1,42 @@
 # ============================================================
-# Scraper Orchestration — Dokploy Compatible
-# Server: 187.77.168.42
-#
-# Only the scheduler runs permanently.
-# Scrapers are triggered by scheduler.sh via docker exec/run.
+# Scraper — Single container with internal cron
+# All scrapers run inside one container triggered by cron
+# Dokploy compatible — no Docker-in-Docker needed
 # ============================================================
 
-x-common-env: &common-env
-  MONGODB_URI: ${MONGODB_URI}
-  POSTGRES_DSN: ${POSTGRES_DSN}
-  TZ: UTC
-
 services:
-
-  # ────────────────────────────────────────────
-  # SCHEDULER — Cron daemon (only always-on)
-  # ────────────────────────────────────────────
-  scheduler:
+  scrapers:
     build:
       context: .
-      dockerfile: Dockerfile.scheduler
-    container_name: scraper-scheduler
+      dockerfile: Dockerfile
     restart: always
-    env_file: .env
     environment:
-      <<: *common-env
+      - MONGODB_URI=${MONGODB_URI}
+      - POSTGRES_DSN=${POSTGRES_DSN}
+      - MONGO_BIENICI_DB=${MONGO_BIENICI_DB}
+      - MONGO_BIENICI_COL_RAW=${MONGO_BIENICI_COL_RAW}
+      - MONGO_BIENICI_COL_CLEAN=${MONGO_BIENICI_COL_CLEAN}
+      - MONGO_BIENICI_COL_PROGRESS=${MONGO_BIENICI_COL_PROGRESS}
+      - MONGO_MUBAWAB_DB=${MONGO_MUBAWAB_DB}
+      - MONGO_MUBAWAB_COL=${MONGO_MUBAWAB_COL}
+      - MONGO_PROPERTYFINDER_DB=${MONGO_PROPERTYFINDER_DB}
+      - MONGO_PROPERTYFINDER_COL=${MONGO_PROPERTYFINDER_COL}
+      - MONGO_MKTLIST_DB=${MONGO_MKTLIST_DB}
+      - MONGO_MKTLIST_COL=${MONGO_MKTLIST_COL}
+      - PG_TABLE_BIENICI=${PG_TABLE_BIENICI}
+      - PG_TABLE_MUBAWAB=${PG_TABLE_MUBAWAB}
+      - PG_TABLE_PROPERTYFINDER=${PG_TABLE_PROPERTYFINDER}
+      - PG_TABLE_MKTLIST=${PG_TABLE_MKTLIST}
+      - PG_ARCHIVE_BIENICI=${PG_ARCHIVE_BIENICI}
+      - PG_ARCHIVE_MUBAWAB=${PG_ARCHIVE_MUBAWAB}
+      - PG_ARCHIVE_PROPERTYFINDER=${PG_ARCHIVE_PROPERTYFINDER}
+      - PG_ARCHIVE_MKTLIST=${PG_ARCHIVE_MKTLIST}
+      - CYCLE_SLEEP=${CYCLE_SLEEP:-86400}
+      - BATCH_SIZE=${BATCH_SIZE:-500}
+      - ALERT_WEBHOOK=${ALERT_WEBHOOK:-}
+      - TZ=UTC
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./logs:/app/logs
-      - ./.env:/app/.env:ro
-      - ./docker-compose.scrapers.yml:/app/docker-compose.scrapers.yml:ro
+      - scraper-logs:/app/logs
 
-  # ────────────────────────────────────────────
-  # Bien'ici (France)
-  # ────────────────────────────────────────────
-  scraper-bienici:
-    build:
-      context: .
-      dockerfile: Dockerfile.scraper-http
-    container_name: scraper-bienici
-    restart: "no"
-    env_file: .env
-    environment:
-      <<: *common-env
-    command: ["echo", "Waiting for cron trigger"]
-    volumes:
-      - ./bienici_scraper_locations.py:/app/bienici_scraper_locations.py:ro
-      - ./.env:/app/.env:ro
-      - ./logs:/app/logs
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "3"
-
-  # ────────────────────────────────────────────
-  # Mubawab (Tunisia)
-  # ────────────────────────────────────────────
-  scraper-mubawab:
-    build:
-      context: .
-      dockerfile: Dockerfile.scraper-http
-    container_name: scraper-mubawab
-    restart: "no"
-    env_file: .env
-    environment:
-      <<: *common-env
-    command: ["echo", "Waiting for cron trigger"]
-    volumes:
-      - ./scraper_mubawab_locations.py:/app/scraper_mubawab_locations.py:ro
-      - ./.env:/app/.env:ro
-      - ./logs:/app/logs
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "3"
-
-  # ────────────────────────────────────────────
-  # MktList (Canada)
-  # ────────────────────────────────────────────
-  scraper-mktlist:
-    build:
-      context: .
-      dockerfile: Dockerfile.scraper-http
-    container_name: scraper-mktlist
-    restart: "no"
-    env_file: .env
-    environment:
-      <<: *common-env
-    command: ["echo", "Waiting for cron trigger"]
-    volumes:
-      - ./scraper_mktlist_locations.py:/app/scraper_mktlist_locations.py:ro
-      - ./.env:/app/.env:ro
-      - ./logs:/app/logs
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "3"
-
-  # ────────────────────────────────────────────
-  # PropertyFinder (Egypt) — Playwright headless
-  # ────────────────────────────────────────────
-  scraper-propertyfinder:
-    build:
-      context: .
-      dockerfile: Dockerfile.scraper-browser
-    container_name: scraper-propertyfinder
-    restart: "no"
-    env_file: .env
-    environment:
-      <<: *common-env
-    command: ["echo", "Waiting for cron trigger"]
-    volumes:
-      - ./scraper_propertyfinder_locations.py:/app/scraper_propertyfinder_locations.py:ro
-      - ./.env:/app/.env:ro
-      - ./logs:/app/logs
-    shm_size: "2gb"
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "3"
-
-  # ────────────────────────────────────────────
-  # SYNC — MongoDB -> PostgreSQL
-  # ────────────────────────────────────────────
-  scraper-sync:
-    build:
-      context: .
-      dockerfile: Dockerfile.scraper-http
-    container_name: scraper-sync
-    restart: "no"
-    env_file: .env
-    environment:
-      <<: *common-env
-    command: ["echo", "Waiting for cron trigger"]
-    volumes:
-      - ./mongo_to_postgre.py:/app/mongo_to_postgre.py:ro
-      - ./.env:/app/.env:ro
-      - ./logs:/app/logs
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "3"
-
-  # ────────────────────────────────────────────
-  # MONITOR
-  # ────────────────────────────────────────────
-  scraper-monitor:
-    build:
-      context: .
-      dockerfile: Dockerfile.scraper-http
-    container_name: scraper-monitor
-    restart: "no"
-    env_file: .env
-    environment:
-      <<: *common-env
-    command: ["echo", "Waiting for cron trigger"]
-    volumes:
-      - ./monitor.py:/app/monitor.py:ro
-      - ./.env:/app/.env:ro
-      - ./logs:/app/logs
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "3"
+volumes:
+  scraper-logs:
