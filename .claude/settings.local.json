@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(for dir in bienici mubawab propertyfinder mktlist)",
+      "Bash(do)",
+      "Bash(sed -i 's/COPY scraper.py sync.py \\\\.\\\\//COPY scraper.py sync.py storage.py .\\\\//' \"c:/Users/hp/projet_scraping/$dir/Dockerfile\")",
+      "Bash(echo \"✅ $dir Dockerfile fixed\")",
+      "Bash(done)",
+      "Bash(for dir in bienici mubawab mktlist)",
+      "Bash(cp \"c:/Users/hp/projet_scraping/propertyfinder/storage.py\" \"c:/Users/hp/projet_scraping/$dir/storage.py\")",
+      "Bash(echo \"✅ $dir/storage.py updated\")"
+    ]
+  }
+}
